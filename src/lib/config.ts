@@ -1,5 +1,9 @@
 export type Config = {
   pssk: string;
+  outerServer: {
+    port: number;
+    hostname: string;
+  };
   symmetricEncryption: {
     enabled: boolean;
     algorithm: string;

@@ -15,7 +15,7 @@ global.logger = new Logger({
 });
 await logger.init();
 
-export class NkWebServerProgram {
+export class HttpsOverWebSockerOuterServer {
   config!: Config;
 
   async start(config: Config) {
@@ -29,9 +29,8 @@ export class NkWebServerProgram {
   }
 
   async _initialize() {
-    startServer();
+    startServer(this.config);
   }
-
 }
 
 process.on("uncaughtException", function (err) {
@@ -40,4 +39,3 @@ process.on("uncaughtException", function (err) {
   console.log("uncaughtException stack:", err.stack);
   console.error(err);
 });
-
