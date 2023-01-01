@@ -3,13 +3,46 @@ import wsModule, { WebSocket } from "ws";
 
 export type HowsWebSocket = { uid: string } & WebSocket;
 
+export enum HosTransmissionInternalState {
+  Idle,
+  AtLeastOneRequestTransmissionSent,
+  ResponseHeadersSent,
+  ResponseCleanlyEnded,
+  HisError,
+  ConnectionError,
+}
+
+export type HosTransmission = {
+  uuid: string;
+  serial: number;
+  hasMore: boolean;
+  responseHeadersSent: boolean;
+  hosTransmissionInternalState: HosTransmissionInternalState;
+};
+
+export enum HosToHisMessageType {
+  ContainsRequestData = "ContainsRequestData",
+  WantsMoreResponseData = "WantsMoreResponseData",
+  NotifyingEndOfTransmission = "NotifyingEndOfTransmission",
+}
+
+export enum HisToHosMessageType {
+  WantsMoreRequestData = "WantsMoreRequestData",
+  ContainsResponseData = "ContainsResponseData",
+  TransmissionError = "TransmissionError",
+}
+
 export type HosToHisMessage = {
   uuid: string;
   serial: number;
-  method: string;
-  url: string;
-  headers: Record<string, string>;
-  body: string;
+
+  type: HosToHisMessageType;
+
+  method: string | null;
+  url: string | null;
+  headers: Record<string, string> | null;
+
+  body: string | null;
   hasMore: boolean;
 };
 
@@ -17,17 +50,11 @@ export type HisToHosMessage = {
   uuid: string;
   serial: number;
 
-  type: string; // "acknowledgement", "response", "error"
+  type: HisToHosMessageType;
 
-  statusCode: number; // http status code. Only matters when type === "response" && serial == 0
-  headers: Record<string, string>; // only matters when serial == 0
+  statusCode: number | null;
+  headers: Record<string, string> | null;
 
-  body: string; // base64
+  body: string | null;
   hasMore: boolean;
 };
-
-export enum HisToHosMessageType {
-  ACKNOWLEDGEMENT = "acknowledgement",
-  RESPONSE = "response",
-  ERROR = "error",
-}

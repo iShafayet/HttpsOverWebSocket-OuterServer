@@ -19,9 +19,9 @@ export class ConnectionPool {
   getAConnection(): WebSocket {
     let keys = Object.keys(this.connectionMap);
 
-    // if (keys.length === 0) {
-    //   throw new CodedError(ErrorCode.NO_WORKER_AVAILABLE);
-    // }
+    if (keys.length === 0) {
+      throw new CodedError(ErrorCode.NO_WORKER_AVAILABLE);
+    }
 
     let randomUidIndex = Math.floor(Math.random() * keys.length - 1);
     let randomUid = `ws${keys[randomUidIndex]}`;
@@ -32,11 +32,5 @@ export class ConnectionPool {
     let uid = this.getNewUid();
     this.connectionMap[uid] = ws as HowsWebSocket;
     (ws as HowsWebSocket).uid = uid;
-
-    // ws.on("message", function message(data) {
-    //   console.log("received: %s", data);
-    // });
-
-    // ws.send("something");
   }
 }
