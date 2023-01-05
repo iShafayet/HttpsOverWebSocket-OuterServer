@@ -18,83 +18,101 @@ import {
   sendSubsequentMessageWithMoreData,
 } from "../utility/transmission-helper.js";
 
-export const handleTransmission = async (
+export const handleTransmission = (
   req: http.IncomingMessage,
   res: http.ServerResponse,
   ws: WebSocket
-) => {
-  let hosTransmission: HosTransmission = {
-    uuid: crypto.randomUUID(),
-    serial: 0,
-    hasMore: false,
-    responseHeadersSent: false,
-    hosTransmissionInternalState: HosTransmissionInternalState.Idle,
-  };
+): Promise<void> => {
+  return new Promise(async (accept, reject) => {
+    ws.once("close", () => {
+      accept();
+    });
 
-  logger.debug("TRANSMISSION: established", hosTransmission.uuid);
+    ws.once("error", (err) => {
+      reject(err);
+    });
 
-  const closeTransaction = async () => {};
+    req.once("error", (err) => {
+      reject(err);
+    });
 
-  const incomingMessageHandler = async (messageString: string) => {
-    let message = await parseAndValidateIncomingMessage(
-      messageString,
-      hosTransmission
-    );
-    logger.debug("TRANSMISSION: hisToHos message received", message);
-    if (!message) return;
+    res.once("finish", () => {
+      accept();
+    });
 
-    if (message.type === HisToHosMessageType.TransmissionError) {
-      if (hosTransmission.responseHeadersSent) {
-        logger.log(
-          "TRANSMISSION: Received TransmissionError from HIS after response headers were already sent. Closing response stream gracefully."
-        );
-      } else {
-        logger.log(
-          "TRANSMISSION: Received TransmissionError. Sending 500 and closing response stream."
-        );
-        res.statusCode = 500;
-      }
-      await writeToStream(res, "500 - Transmission Error");
-      res.end();
-      await closeTransaction();
-      return;
-    }
+    let hosTransmission: HosTransmission = {
+      uuid: crypto.randomUUID(),
+      serial: 0,
+      hasMore: false,
+      responseHeadersSent: false,
+      hosTransmissionInternalState: HosTransmissionInternalState.Idle,
+    };
 
-    if (message.type === HisToHosMessageType.WantsMoreRequestData) {
-      await sendSubsequentMessageWithMoreData(hosTransmission, req, res, ws);
-      return;
-    }
+    logger.debug("TRANSMISSION: established", hosTransmission.uuid);
 
-    if (message.type === HisToHosMessageType.ContainsResponseData) {
-      if (!hosTransmission.responseHeadersSent) {
-        res.statusCode = message.statusCode || 500;
-        if (message.headers) {
-          for (let headerKey of Object.keys(message.headers)) {
-            res.setHeader(headerKey, message.headers![headerKey]);
-          }
+    const closeTransaction = async () => {};
+
+    const incomingMessageHandler = async (messageString: string) => {
+      let message = await parseAndValidateIncomingMessage(
+        messageString,
+        hosTransmission
+      );
+      logger.debug("TRANSMISSION: hisToHos message received", message);
+      if (!message) return;
+
+      if (message.type === HisToHosMessageType.TransmissionError) {
+        if (hosTransmission.responseHeadersSent) {
+          logger.log(
+            "TRANSMISSION: Received TransmissionError from HIS after response headers were already sent. Closing response stream gracefully."
+          );
+        } else {
+          logger.log(
+            "TRANSMISSION: Received TransmissionError. Sending 500 and closing response stream."
+          );
+          res.statusCode = 500;
         }
-      }
-
-      if (message.body && message.body.length) {
-        let bodyBuffer = Buffer.from(message.body, "base64");
-        await writeToStream(res, bodyBuffer);
-      }
-
-      if (message.hasMore) {
-        await sendSubsequentMessageRequestingMoreData(
-          hosTransmission,
-          req,
-          res,
-          ws
-        );
-      } else {
+        await writeToStream(res, "500 - Transmission Error");
         res.end();
         await closeTransaction();
+        return;
       }
-    }
-  };
 
-  ws.on("message", incomingMessageHandler);
+      if (message.type === HisToHosMessageType.WantsMoreRequestData) {
+        await sendSubsequentMessageWithMoreData(hosTransmission, req, res, ws);
+        return;
+      }
 
-  await sendFirstMessage(hosTransmission, req, res, ws);
+      if (message.type === HisToHosMessageType.ContainsResponseData) {
+        if (!hosTransmission.responseHeadersSent) {
+          res.statusCode = message.statusCode || 500;
+          if (message.headers) {
+            for (let headerKey of Object.keys(message.headers)) {
+              res.setHeader(headerKey, message.headers![headerKey]);
+            }
+          }
+        }
+
+        if (message.body && message.body.length) {
+          let bodyBuffer = Buffer.from(message.body, "base64");
+          await writeToStream(res, bodyBuffer);
+        }
+
+        if (message.hasMore) {
+          await sendSubsequentMessageRequestingMoreData(
+            hosTransmission,
+            req,
+            res,
+            ws
+          );
+        } else {
+          res.end();
+          await closeTransaction();
+        }
+      }
+    };
+
+    ws.on("message", incomingMessageHandler);
+
+    await sendFirstMessage(hosTransmission, req, res, ws);
+  });
 };
