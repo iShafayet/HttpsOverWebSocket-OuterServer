@@ -17,7 +17,7 @@ export const extractProcessParams = () => {
   return process.argv.slice(index + 1);
 };
 
-export const loadConfig = (path: String): Config => {
+export const loadConfig = (path: string): Config => {
   console.log(`STARTUP trying to load configuration from: ${path}`);
   let content = readFileSync(<any>path, { encoding: "utf8" });
   console.log(`STARTUP loading config: ${content}`);

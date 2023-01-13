@@ -14,6 +14,7 @@ import {
 import {
   parseAndValidateIncomingMessage,
   sendFirstMessage,
+  sendSubsequentMessageNotifyingEndOfTransmission,
   sendSubsequentMessageRequestingMoreData,
   sendSubsequentMessageWithMoreData,
 } from "../utility/transmission-helper.js";
@@ -60,6 +61,8 @@ export const handleTransmission = (
       logger.debug("TRANSMISSION: hisToHos message received", message);
       if (!message) return;
 
+      hosTransmission.serial = message.serial;
+
       if (message.type === HisToHosMessageType.TransmissionError) {
         if (hosTransmission.responseHeadersSent) {
           logger.log(
@@ -105,6 +108,12 @@ export const handleTransmission = (
             ws
           );
         } else {
+          await sendSubsequentMessageNotifyingEndOfTransmission(
+            hosTransmission,
+            req,
+            res,
+            ws
+          );
           res.end();
           await closeTransaction();
         }

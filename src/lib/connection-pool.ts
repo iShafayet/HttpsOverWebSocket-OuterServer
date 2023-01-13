@@ -2,6 +2,7 @@ import wsModule, { WebSocket } from "ws";
 import { ErrorCode } from "../constant/error-codes.js";
 import { HowsWebSocket } from "../types/types.js";
 import { CodedError } from "../utility/coded-error.js";
+import { sleep } from "../utility/misc-utils.js";
 
 export class ConnectionPool {
   private uidSeed = 0;
@@ -33,14 +34,17 @@ export class ConnectionPool {
     this.reportConnectionStatus();
   }
 
-  getAnAvailableConnection(): HowsWebSocket {
+  async getAnAvailableConnection(delayThreshold = 0): Promise<HowsWebSocket> {
     logger.log(`CPOOL: An available connection is requested.`);
 
     if (this.availableConnectionMap.size === 0) {
-      throw new CodedError(
-        ErrorCode.NO_WORKER_AVAILABLE,
-        `${ErrorCode.NO_WORKER_AVAILABLE}: No worker is available to handle the request`
-      );
+      await sleep(delayThreshold);
+      if (this.availableConnectionMap.size === 0) {
+        throw new CodedError(
+          ErrorCode.NO_WORKER_AVAILABLE,
+          `${ErrorCode.NO_WORKER_AVAILABLE}: No worker is available to handle the request`
+        );
+      }
     }
 
     let [uid, ws] = this.availableConnectionMap.entries().next().value;
@@ -54,8 +58,9 @@ export class ConnectionPool {
 
   returnSocketBackToPoolIfOpen(ws: HowsWebSocket) {
     if (!ws) return;
-    logger.log(`CPOOL: ${ws.uid}: connection is being returned to the pool.`);
     if (!ws.OPEN) return;
+
+    logger.log(`CPOOL: ${ws.uid}: connection is being returned to the pool.`);
     if (!this.occupiedConnectionMap.has(ws.uid)) return;
     this.occupiedConnectionMap.delete(ws.uid);
     this.availableConnectionMap.set(ws.uid, ws);

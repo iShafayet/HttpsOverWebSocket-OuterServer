@@ -38,7 +38,7 @@ class Logger {
 
   debug(...args: any) {
     if (!this.switches.debug) return;
-    console.log.apply(console, [STYLE.FgYellow, "DEBUG\t", ...args]);
+    console.log.apply(console, [STYLE.FgYellow + "DEBUG\t", ...args]);
   }
 
   log(...args: any) {

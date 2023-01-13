@@ -64,21 +64,11 @@ export const parseAndValidateIncomingMessage = async (
       return null;
     }
 
-    if (message.serial > hosTransmission.serial) {
+    if (message.serial !== hosTransmission.serial + 1) {
       logger.warn(
         new Error(
-          `Serial mismatch found. HisToHosMessage.serial cannot be greater than serial of latest HosToHisMessage.` +
-            `Related message serial: ${message.serial}, handler serial: ${hosTransmission.serial}`
-        )
-      );
-      return null;
-    }
-
-    if (message.serial < hosTransmission.serial) {
-      logger.warn(
-        new Error(
-          `Unexpectedly received reply to an earlier message AFTER a new message have been sent.` +
-            `Related message serial: ${message.serial}, handler serial: ${hosTransmission.serial}`
+          `Serial mismatch found. HisToHosMessage.serial must be strictly one more than previous message's serial.` +
+            `Received serial: ${message.serial}, Previous serial: ${hosTransmission.serial}`
         )
       );
       return null;
@@ -86,6 +76,17 @@ export const parseAndValidateIncomingMessage = async (
   }
 
   return message;
+};
+
+const sendMessage = (
+  message: HosToHisMessage,
+  hosTransmission: HosTransmission,
+  ws: WebSocket
+) => {
+  hosTransmission.serial += 1;
+  message.serial += 1;
+  let messageString = JSON.stringify(message);
+  ws.send(messageString);
 };
 
 export const sendFirstMessage = async (
@@ -118,8 +119,7 @@ export const sendFirstMessage = async (
 
   logger.debug("TRANSMISSION: hosToHis message (first)", message);
 
-  let messageString = JSON.stringify(message);
-  ws.send(messageString);
+  sendMessage(message, hosTransmission, ws);
 };
 
 export const sendSubsequentMessageWithMoreData = async (
@@ -149,8 +149,7 @@ export const sendSubsequentMessageWithMoreData = async (
 
   logger.debug("TRANSMISSION: hosToHis message (subsequent)", message);
 
-  let messageString = JSON.stringify(message);
-  ws.send(messageString);
+  sendMessage(message, hosTransmission, ws);
 };
 
 export const sendSubsequentMessageRequestingMoreData = async (
@@ -174,6 +173,30 @@ export const sendSubsequentMessageRequestingMoreData = async (
 
   logger.debug("TRANSMISSION: hosToHis message (subsequent)", message);
 
-  let messageString = JSON.stringify(message);
-  ws.send(messageString);
+  sendMessage(message, hosTransmission, ws);
+};
+
+
+export const sendSubsequentMessageNotifyingEndOfTransmission = async (
+  hosTransmission: HosTransmission,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  ws: WebSocket
+) => {
+  let message: HosToHisMessage = {
+    uuid: hosTransmission.uuid,
+    serial: hosTransmission.serial,
+    type: HosToHisMessageType.NotifyingEndOfTransmission,
+
+    method: null,
+    url: null,
+    headers: null,
+
+    body: null,
+    hasMore: false,
+  };
+
+  logger.debug("TRANSMISSION: hosToHis message (subsequent)", message);
+
+  sendMessage(message, hosTransmission, ws);
 };

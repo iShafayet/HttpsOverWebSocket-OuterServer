@@ -16,6 +16,8 @@ let httpServer: http.Server;
 
 let usingSsl = false;
 
+const DELAY_THRESHOLD = 5000;
+
 const createWebSocketServer = async () => {
   wss = new WebSocketServer({ server: httpServer });
 };
@@ -47,7 +49,7 @@ export const startServer = async (config: Config) => {
 
     let socket: HowsWebSocket | null = null;
     try {
-      socket = wsPool.getAnAvailableConnection();
+      socket = await wsPool.getAnAvailableConnection(DELAY_THRESHOLD);
       await handleTransmission(req, res, socket);
       wsPool.returnSocketBackToPoolIfOpen(socket);
     } catch (ex) {
