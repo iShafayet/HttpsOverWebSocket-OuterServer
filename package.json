@@ -8,6 +8,7 @@
     "dev": "npx tsc && concurrently \"npx tsc --watch\" \"nodemon -q dist/start.js\"",
     "lint": "eslint .",
     "start": "node dist/start.js",
+    "start-compiled": "npx tsc && node dist/start.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "type": "module",

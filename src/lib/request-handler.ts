@@ -10,6 +10,7 @@ import {
   DeveloperError,
   UserError,
 } from "../utility/coded-error.js";
+import { decryptText, encryptText } from "../utility/crypto-utils.js";
 import {
   parseHisToHosMessage,
   prepareHosToHisMessage,
@@ -65,12 +66,27 @@ export class RequestHandler {
       type,
       message
     );
-    logger.debug(messageString);
+
+    if (this.config.symmetricEncryption.enabled) {
+      messageString = JSON.stringify(
+        await encryptText(messageString, this.config.symmetricEncryption.secret)
+      );
+    }
+
     this.socket.send(messageString);
   }
 
   private async handleIncomingMessage(rawMessage: string) {
     if (!this.transmission) return;
+
+    if (this.config.symmetricEncryption.enabled) {
+      let parts = JSON.parse(rawMessage) as { cipher: any; iv: any; salt: any };
+      rawMessage = await decryptText(
+        parts,
+        this.config.symmetricEncryption.secret
+      );
+    }
+
     let [pssk, uuid, serial, type, message] = parseHisToHosMessage(rawMessage);
 
     if (this.config.pssk !== pssk) {
