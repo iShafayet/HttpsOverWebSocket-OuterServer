@@ -1,22 +1,16 @@
-import https from "https";
 import http from "http";
-import fs from "fs";
+import https from "https";
+import { AddressInfo } from "net";
 import wsModule, { WebSocketServer } from "ws";
 import { Config } from "./lib/config.js";
-import { AddressInfo } from "net";
 import { ConnectionPool } from "./lib/connection-pool.js";
-import { handleTransmission } from "./lib/handle-transmission.js";
-import { CodedError } from "./utility/coded-error.js";
-import { ErrorCode } from "./constant/error-codes.js";
-import { HowsWebSocket } from "./types/types.js";
+import { RequestHandler } from "./lib/request-handler.js";
 
 let wsPool = new ConnectionPool();
 let wss: wsModule.Server<wsModule.WebSocket>;
 let httpServer: http.Server;
 
 let usingSsl = false;
-
-const DELAY_THRESHOLD = 5000;
 
 const createWebSocketServer = async () => {
   wss = new WebSocketServer({ server: httpServer });
@@ -45,37 +39,25 @@ export const startServer = async (config: Config) => {
     req: http.IncomingMessage,
     res: http.ServerResponse
   ) => {
-    logger.log(`WEBSERVER: New Request ${req.url}. Creating new transmission.`);
-
-    let socket: HowsWebSocket | null = null;
+    logger.log(`WEBSERVER: New Request ${req.url}. Creating new <RequestHandler>.`);
     try {
-      socket = await wsPool.getAnAvailableConnection(DELAY_THRESHOLD);
-      await handleTransmission(req, res, socket);
-      wsPool.returnSocketBackToPoolIfOpen(socket);
+      let requestHandler = new RequestHandler(wsPool, req, res);
+      await requestHandler.initiateRequestHandling();
     } catch (ex) {
-      if (socket) {
-        wsPool.returnSocketBackToPoolIfOpen(socket);
-      }
-      logger.log("WEBSERVER: Following excpetion while handling transmission.");
+      logger.log(
+        "WEBSERVER: Following excpetion while creating <RequestHandler>."
+      );
       logger.error(ex as Error);
-      if (
-        ex instanceof CodedError &&
-        ex.code === ErrorCode.NO_WORKER_AVAILABLE
-      ) {
-        if (!res.headersSent) {
-          res.statusCode = 503;
-        }
-        res.write("Error: 503 - No worker is available to handle the request");
-      } else {
-        if (!res.headersSent) {
-          res.statusCode = 400;
-        }
-        let message =
-          ex && "message" in (ex as any)
-            ? (ex as any).message
-            : "Internal Server Error";
-        res.write(message);
+
+      if (!res.headersSent) {
+        res.statusCode = 500;
       }
+      let message =
+        ex && "message" in (ex as any)
+          ? (ex as any).message
+          : "Internal Server Error";
+      res.write(message);
+
       res.end();
     }
   };

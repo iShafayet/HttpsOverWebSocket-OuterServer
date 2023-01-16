@@ -1,4 +1,4 @@
-import wsModule, { WebSocket } from "ws";
+import { WebSocket } from "ws";
 import { ErrorCode } from "../constant/error-codes.js";
 import { HowsWebSocket } from "../types/types.js";
 import { CodedError } from "../utility/coded-error.js";
@@ -49,6 +49,7 @@ export class ConnectionPool {
 
     let [uid, ws] = this.availableConnectionMap.entries().next().value;
     this.occupiedConnectionMap.set(uid, ws);
+    this.availableConnectionMap.delete(uid);
 
     logger.log(`CPOOL: ${uid}: Leasing connection.`);
     this.reportConnectionStatus();

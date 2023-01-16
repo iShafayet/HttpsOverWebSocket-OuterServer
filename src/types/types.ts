@@ -1,24 +1,6 @@
-import { type } from "os";
-import wsModule, { WebSocket } from "ws";
+import { WebSocket } from "ws";
 
 export type HowsWebSocket = { uid: string } & WebSocket;
-
-export enum HosTransmissionInternalState {
-  Idle,
-  AtLeastOneRequestTransmissionSent,
-  ResponseHeadersSent,
-  ResponseCleanlyEnded,
-  HisError,
-  ConnectionError,
-}
-
-export type HosTransmission = {
-  uuid: string;
-  serial: number;
-  hasMore: boolean;
-  responseHeadersSent: boolean;
-  hosTransmissionInternalState: HosTransmissionInternalState;
-};
 
 export enum HosToHisMessageType {
   ContainsRequestData = "ContainsRequestData",
@@ -33,11 +15,6 @@ export enum HisToHosMessageType {
 }
 
 export type HosToHisMessage = {
-  uuid: string;
-  serial: number;
-
-  type: HosToHisMessageType;
-
   method: string | null;
   url: string | null;
   headers: Record<string, string> | null;
@@ -47,11 +24,6 @@ export type HosToHisMessage = {
 };
 
 export type HisToHosMessage = {
-  uuid: string;
-  serial: number;
-
-  type: HisToHosMessageType;
-
   statusCode: number | null;
   headers: Record<string, string> | null;
 
