@@ -39,9 +39,11 @@ export const startServer = async (config: Config) => {
     req: http.IncomingMessage,
     res: http.ServerResponse
   ) => {
-    logger.log(`WEBSERVER: New Request ${req.url}. Creating new <RequestHandler>.`);
+    logger.log(
+      `WEBSERVER: New Request ${req.url}. Creating new <RequestHandler>.`
+    );
     try {
-      let requestHandler = new RequestHandler(wsPool, req, res);
+      let requestHandler = new RequestHandler(wsPool, req, res, config);
       await requestHandler.initiateRequestHandling();
     } catch (ex) {
       logger.log(

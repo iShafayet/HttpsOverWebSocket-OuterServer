@@ -39,7 +39,7 @@ export const unpackHisToHosMessage = (message: string): HisToHosMessage => {
 
 export const parseHisToHosMessage = (
   rawMessage: string
-): [string, number, HisToHosMessageType, HisToHosMessage] => {
+): [string, string, number, HisToHosMessageType, HisToHosMessage] => {
   const MINIMUM_LENGTH = 20;
   if (rawMessage.length < MINIMUM_LENGTH) {
     throw new UserError("INVALID_MESSAGE", "Message is too short");
@@ -55,21 +55,20 @@ export const parseHisToHosMessage = (
 
   lhs = lhs.slice(1, lhs.length - 1);
 
-  logger.debug({ lhs, rhs, rawMessage });
-
-  let [uuid, serial, type] = lhs.split(",");
+  let [pssk, uuid, serial, type] = lhs.split(",");
 
   let message = JSON.parse(rhs);
 
-  return [uuid, parseInt(serial), type as HisToHosMessageType, message];
+  return [pssk, uuid, parseInt(serial), type as HisToHosMessageType, message];
 };
 
 export const prepareHosToHisMessage = (
+  pssk: string,
   uuid: string,
   serial: number,
   type: HosToHisMessageType,
   message: HosToHisMessage
 ): string => {
-  let rawMessage = `{${uuid},${serial},${type}}` + JSON.stringify(message);
+  let rawMessage = `{${pssk},${uuid},${serial},${type}}` + JSON.stringify(message);
   return rawMessage;
 };

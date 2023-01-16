@@ -5,11 +5,16 @@ import {
   HosToHisMessageType,
   HowsWebSocket,
 } from "../types/types.js";
-import { CodedError, DeveloperError } from "../utility/coded-error.js";
+import {
+  CodedError,
+  DeveloperError,
+  UserError,
+} from "../utility/coded-error.js";
 import {
   parseHisToHosMessage,
   prepareHosToHisMessage,
 } from "../utility/transmission-helper.js";
+import { Config } from "./config.js";
 import { ConnectionPool } from "./connection-pool.js";
 import { Transmission } from "./transmission.js";
 
@@ -31,15 +36,18 @@ export class RequestHandler {
   socket!: HowsWebSocket;
   transmission!: Transmission;
   serial: number = 0;
+  config: Config;
 
   constructor(
     wsPool: ConnectionPool,
     req: http.IncomingMessage,
-    res: http.ServerResponse
+    res: http.ServerResponse,
+    config: Config
   ) {
     this.wsPool = wsPool;
     this.req = req;
     this.res = res;
+    this.config = config;
 
     this.uuid = crypto.randomUUID();
     this.state = RequestHandlerState.INITIAL;
@@ -51,6 +59,7 @@ export class RequestHandler {
   ) {
     this.serial += 1;
     let messageString = prepareHosToHisMessage(
+      this.config.pssk,
       this.uuid,
       this.serial,
       type,
@@ -62,7 +71,18 @@ export class RequestHandler {
 
   private async handleIncomingMessage(rawMessage: string) {
     if (!this.transmission) return;
-    let [uuid, serial, type, message] = parseHisToHosMessage(rawMessage);
+    let [pssk, uuid, serial, type, message] = parseHisToHosMessage(rawMessage);
+
+    if (this.config.pssk !== pssk) {
+      logger.warn(
+        new UserError(
+          "RECEIVED_MESSAGE_WITH_INVALID_PSSK",
+          "Invalid PSSK Provided. We will disregard this message."
+        )
+      );
+      return;
+      // TODO: Take stronger action than ignoring the message.
+    }
 
     if (this.uuid !== uuid) {
       logger.warn(
