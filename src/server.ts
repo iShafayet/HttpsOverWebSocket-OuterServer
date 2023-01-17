@@ -5,6 +5,7 @@ import wsModule, { WebSocketServer } from "ws";
 import { Config } from "./lib/config.js";
 import { ConnectionPool } from "./lib/connection-pool.js";
 import { RequestHandler } from "./lib/request-handler.js";
+import { prepareSslDetails } from "./utility/ssl-utils.js";
 
 let wsPool = new ConnectionPool();
 let wss: wsModule.Server<wsModule.WebSocket>;
@@ -16,9 +17,10 @@ const createWebSocketServer = async () => {
   wss = new WebSocketServer({ server: httpServer });
 };
 
-const createWebServer = async () => {
+const createWebServer = async (config: Config) => {
   if (usingSsl) {
-    httpServer = https.createServer();
+    let sslDetails = prepareSslDetails(config);
+    httpServer = https.createServer(sslDetails);
   } else {
     httpServer = http.createServer();
   }
@@ -27,7 +29,7 @@ const createWebServer = async () => {
 export const startServer = async (config: Config) => {
   usingSsl = config.ssl.enabled;
 
-  await createWebServer();
+  await createWebServer(config);
   await createWebSocketServer();
 
   wss.on("connection", function connection(ws) {
