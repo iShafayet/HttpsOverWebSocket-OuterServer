@@ -30,6 +30,11 @@ export class ConnectionPool {
       this.reportConnectionStatus();
     });
 
+    logger.log(
+      `CPOOL: ${uid}: Connection accepted from IP: ${
+        (ws as any)._socket.remoteAddress
+      }.`
+    );
     this.availableConnectionMap.set(uid, ws as HowsWebSocket);
     this.reportConnectionStatus();
   }
