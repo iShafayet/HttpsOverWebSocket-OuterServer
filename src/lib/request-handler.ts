@@ -170,7 +170,10 @@ export class RequestHandler {
       this.transmission.start();
     } catch (ex) {
       if (this.socket) {
-        this.wsPool.returnSocketBackToPoolIfOpen(this.socket);
+        ("pass");
+        // NOTE: Current protocol is for client to terminate the connection. Hence no return is needed.
+        // This is subject to change soon.
+        // this.wsPool.returnSocketBackToPoolIfOpen(this.socket);
       }
 
       logger.log(
@@ -213,7 +216,14 @@ export class RequestHandler {
       : RequestHandlerState.ENDED_WITH_SUCCESS;
 
     if (this.socket) {
-      this.wsPool.returnSocketBackToPoolIfOpen(this.socket);
+      // NOTE: Current protocol is for client to terminate the connection. Hence no return is needed.
+      // This is subject to change soon.
+      // this.wsPool.returnSocketBackToPoolIfOpen(this.socket);
+      try {
+        this.socket.close();
+      } catch (error) {
+        logger.warn(error as Error);
+      }
     }
 
     try {

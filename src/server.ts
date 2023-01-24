@@ -29,6 +29,7 @@ const createWebServer = async (config: Config) => {
 export const startServer = async (config: Config) => {
   usingSsl = config.ssl.enabled;
 
+  await wsPool.start();
   await createWebServer(config);
   await createWebSocketServer();
 

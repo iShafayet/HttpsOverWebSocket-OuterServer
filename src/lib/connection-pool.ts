@@ -73,4 +73,8 @@ export class ConnectionPool {
     let message = `Available connections: ${this.availableConnectionMap.size}, occupied connections: ${this.occupiedConnectionMap.size}`;
     logger.debug(`CPOOL: ${message}`);
   }
+
+  async start() {
+    this.reportConnectionStatus();
+  }
 }
