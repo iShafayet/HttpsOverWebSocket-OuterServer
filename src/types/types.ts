@@ -1,6 +1,9 @@
 import { WebSocket } from "ws";
 
-export type HowsWebSocket = { uid: string } & WebSocket;
+export type HowsWebSocket = {
+  uid: string;
+  isAlive: boolean;
+} & WebSocket;
 
 export enum HosToHisMessageType {
   ContainsRequestData = "ContainsRequestData",

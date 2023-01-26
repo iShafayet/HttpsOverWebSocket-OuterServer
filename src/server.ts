@@ -7,7 +7,7 @@ import { ConnectionPool } from "./lib/connection-pool.js";
 import { RequestHandler } from "./lib/request-handler.js";
 import { prepareSslDetails } from "./utility/ssl-utils.js";
 
-let wsPool = new ConnectionPool();
+let wsPool: ConnectionPool;
 let wss: wsModule.Server<wsModule.WebSocket>;
 let httpServer: http.Server;
 
@@ -29,9 +29,11 @@ const createWebServer = async (config: Config) => {
 export const startServer = async (config: Config) => {
   usingSsl = config.ssl.enabled;
 
-  await wsPool.start();
   await createWebServer(config);
   await createWebSocketServer();
+
+  wsPool = new ConnectionPool(wss);
+  await wsPool.start();
 
   wss.on("connection", function connection(ws) {
     logger.log("WSS: New Connection. Adding to pool.");
