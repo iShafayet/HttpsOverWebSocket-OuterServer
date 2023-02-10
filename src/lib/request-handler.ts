@@ -127,7 +127,7 @@ export class RequestHandler {
 
   public async initiateRequestHandling() {
     try {
-      this.socket = await this.wsPool.getAnAvailableConnection(
+      this.socket = await this.wsPool.leaseAnAvailableConnection(
         INITIAL_WEBSOCKET_ACQUISITION_DELAY_THRESHOLD
       );
 
@@ -139,6 +139,7 @@ export class RequestHandler {
 
       this.socket.on("message", (rawMessage: string, isBinary) => {
         rawMessage = isBinary ? rawMessage : rawMessage.toString();
+        this.wsPool.notifyMessageReceived(this.socket);
         this.handleIncomingMessage(rawMessage);
       });
 

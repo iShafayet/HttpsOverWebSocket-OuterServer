@@ -1,39 +1,45 @@
 import { WebSocket } from "ws";
 import { ErrorCode } from "../constant/error-codes.js";
-import { HowsWebSocket } from "../types/types.js";
+import { HosToHisMessageType, HowsWebSocket } from "../types/types.js";
 import { CodedError } from "../utility/coded-error.js";
 import { sleep } from "../utility/misc-utils.js";
 import wsModule, { WebSocketServer } from "ws";
 import constants from "../constant/common-constants.js";
+import { prepareHosToHisMessage } from "../utility/transmission-helper.js";
+import { Config } from "./config.js";
+import { encryptText } from "../utility/crypto-utils.js";
 
 export class ConnectionPool {
   private uidSeed = 0;
 
   private availableConnectionMap!: Map<string, HowsWebSocket>;
-  private occupiedConnectionMap!: Map<string, HowsWebSocket>;
+  private unverifiedConnectionMap!: Map<string, HowsWebSocket>;
   wss: wsModule.Server<WebSocket>;
+  config: Config;
 
-  constructor(wss: wsModule.Server<wsModule.WebSocket>) {
+  constructor(wss: wsModule.Server<wsModule.WebSocket>, config: Config) {
     this.availableConnectionMap = new Map<string, HowsWebSocket>();
-    this.occupiedConnectionMap = new Map<string, HowsWebSocket>();
+    this.unverifiedConnectionMap = new Map<string, HowsWebSocket>();
     this.wss = wss;
+    this.config = config;
   }
 
   private getNewUid(): string {
     return `ws${this.uidSeed++}`;
   }
 
-  addToPool(_ws: WebSocket) {
+  public addToPool(_ws: WebSocket) {
     let ws: HowsWebSocket = _ws as HowsWebSocket;
 
     let uid = this.getNewUid();
     ws.uid = uid;
-    ws.isAlive = true;
+    ws.lastReceiveEpoch = 0;
+    ws.hasPingBeenSentOut = false;
 
     ws.once("close", () => {
       logger.log(`CPOOL: ${uid}: Connection closed.`);
       this.availableConnectionMap.delete(uid);
-      this.occupiedConnectionMap.delete(uid);
+      this.unverifiedConnectionMap.delete(uid);
       this.reportConnectionStatus();
     });
 
@@ -42,8 +48,8 @@ export class ConnectionPool {
       ws.terminate();
     });
 
-    ws.on("pong", () => {
-      ws.isAlive = true;
+    ws.on("message", () => {
+      this.notifyMessageReceived(ws);
     });
 
     logger.log(
@@ -51,11 +57,13 @@ export class ConnectionPool {
         (ws as any)._socket.remoteAddress
       }.`
     );
-    this.availableConnectionMap.set(uid, ws as HowsWebSocket);
+    this.unverifiedConnectionMap.set(uid, ws as HowsWebSocket);
     this.reportConnectionStatus();
   }
 
-  async getAnAvailableConnection(delayThreshold = 0): Promise<HowsWebSocket> {
+  public async leaseAnAvailableConnection(
+    delayThreshold = 0
+  ): Promise<HowsWebSocket> {
     logger.log(`CPOOL: An available connection is requested.`);
 
     if (this.availableConnectionMap.size === 0) {
@@ -68,9 +76,13 @@ export class ConnectionPool {
       }
     }
 
-    let [uid, ws] = this.availableConnectionMap.entries().next().value;
-    this.occupiedConnectionMap.set(uid, ws);
+    let [uid, ws] = this.availableConnectionMap.entries().next().value as [
+      string,
+      HowsWebSocket
+    ];
     this.availableConnectionMap.delete(uid);
+
+    ws.removeAllListeners("message");
 
     logger.log(`CPOOL: ${uid}: Leasing connection.`);
     this.reportConnectionStatus();
@@ -78,20 +90,8 @@ export class ConnectionPool {
     return ws;
   }
 
-  returnSocketBackToPoolIfOpen(ws: HowsWebSocket) {
-    if (!ws) return;
-    if (!ws.OPEN) return;
-
-    logger.log(`CPOOL: ${ws.uid}: connection is being returned to the pool.`);
-    if (!this.occupiedConnectionMap.has(ws.uid)) return;
-    this.occupiedConnectionMap.delete(ws.uid);
-    this.availableConnectionMap.set(ws.uid, ws);
-    logger.log(`CPOOL: ${ws.uid}: connection has been returned.`);
-    this.reportConnectionStatus();
-  }
-
-  reportConnectionStatus() {
-    let message = `Available connections: ${this.availableConnectionMap.size}, occupied connections: ${this.occupiedConnectionMap.size}`;
+  public reportConnectionStatus() {
+    let message = `Available connections: ${this.availableConnectionMap.size}; Unverified connections: ${this.unverifiedConnectionMap.size}`;
     logger.debug(`CPOOL: ${message}`);
   }
 
@@ -100,23 +100,79 @@ export class ConnectionPool {
     this.setUpAutomatedHearbeatTest();
   }
 
-  private async setUpAutomatedHearbeatTest() {
-    const interval = setInterval(() => {
-      logger.log(`CPOOL: Starting dead connection detection round.`);
-      this.wss.clients.forEach((_ws) => {
-        let ws = _ws as HowsWebSocket;
+  public notifyMessageReceived(ws: HowsWebSocket) {
+    logger.log(`CPOOL: ${ws.uid}: Was notified message received.`);
+    if (this.unverifiedConnectionMap.has(ws.uid)) {
+      this.unverifiedConnectionMap.delete(ws.uid);
+      this.availableConnectionMap.set(ws.uid, ws);
+    }
+    this.reportConnectionStatus();
 
-        if (ws.isAlive === false) {
-          logger.log(`CPOOL: ${ws.uid}: Pruning dead connection.`);
-          return ws.terminate();
+    ws.lastReceiveEpoch = Date.now();
+    ws.hasPingBeenSentOut = false;
+  }
+
+  private async setUpAutomatedHearbeatTest() {
+    const fn = async () => {
+      logger.log(`CPOOL: Starting dead connection detection round.`);
+
+      for (let _ws of this.wss.clients) {
+        let ws = _ws as HowsWebSocket;
+        try {
+          if (
+            ws.lastReceiveEpoch + constants.socketIdleRejectionThreshold <
+              Date.now() &&
+            ws.hasPingBeenSentOut
+          ) {
+            logger.log(`CPOOL: ${ws.uid}: Pruning dead connection.`);
+            ws.terminate();
+            continue;
+          }
+
+          if (
+            ws.lastReceiveEpoch + constants.socketIdleCheckThreshold <
+              Date.now() &&
+            !ws.hasPingBeenSentOut
+          ) {
+            let messageString = prepareHosToHisMessage(
+              this.config.pssk,
+              "-1",
+              -1,
+              HosToHisMessageType.KeepAlivePing,
+              {
+                method: null,
+                url: null,
+                headers: null,
+                body: null,
+                hasMore: false,
+              }
+            );
+
+            if (this.config.symmetricEncryption.enabled) {
+              messageString = JSON.stringify(
+                await encryptText(
+                  messageString,
+                  this.config.symmetricEncryption.secret
+                )
+              );
+            }
+
+            ws.send(messageString);
+
+            ws.hasPingBeenSentOut = true;
+          }
+        } catch (ex) {
+          ("pass");
         }
-        ws.isAlive = false;
-        ws.ping();
-      });
-    }, constants.socketPingTimeout);
+      }
+
+      timeout = setTimeout(fn, constants.pruningAttemptInterval);
+    };
+
+    let timeout = setTimeout(fn, constants.pruningAttemptInterval);
 
     this.wss.on("close", function close() {
-      clearInterval(interval);
+      clearTimeout(timeout);
     });
   }
 }

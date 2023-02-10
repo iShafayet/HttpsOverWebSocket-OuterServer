@@ -32,7 +32,7 @@ export const startServer = async (config: Config) => {
   await createWebServer(config);
   await createWebSocketServer();
 
-  wsPool = new ConnectionPool(wss);
+  wsPool = new ConnectionPool(wss, config);
   await wsPool.start();
 
   wss.on("connection", function connection(ws) {
